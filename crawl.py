@@ -13,7 +13,7 @@ REPLACEX = re.compile(r"[^-_a-zA-Z0-9]")
 TAG = os.environ.get("TAG", 'tag')
 PROFILE = os.environ.get("PROFILE", False)
 TIME_LIMIT = float(os.environ.get("TIME_LIMIT", 15.0))
-TIME_OUT = max(TIME_LIMIT, 1.0) * 2.0
+TIME_OUT = 5.0 #max(TIME_LIMIT, 1.0) * 2.0
 
 def main(argv):
     if len(sys.argv) == 1:
@@ -36,7 +36,7 @@ def main(argv):
             "crawl",
             "--",
             "-b",
-            "/home/jjuecks/brave/brave-browser/src/out/Static/brave",
+            "/home/jjuecks/brave/Static/brave",
             "-o",
             os.path.abspath(collection_dir),
             "-t",
@@ -60,13 +60,18 @@ def main(argv):
                 "cwd": "/home/jjuecks/brave/pagegraph-crawl",
                 "stdout": log,
                 "stderr": subprocess.STDOUT,
-                "check": False,
-                "timeout": TIME_OUT,
             }
-            try:
-                subprocess.run(cmd_argv, **cmd_options)
-            except subprocess.TimeoutExpired:
-                print("TIMEOUT", flush=True)
+            with subprocess.Popen(cmd_argv, **cmd_options) as proc:
+                try:
+                    status = proc.wait(timeout=TIME_OUT)
+                    if status != 0:
+                        print(f"WARNING: status={status}", flush=True)
+                except subprocess.TimeoutExpired:
+                    proc.terminate() # soft-kill (to let node clean up the browser processes)
+                    print("TIMEOUT", flush=True)
+                except:
+                    proc.kill() # hard-kill since this is something bad/fatal
+                    raise
 
 
 if __name__ == "__main__":
