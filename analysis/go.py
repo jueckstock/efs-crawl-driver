@@ -66,24 +66,12 @@ def get_node_bag_for_dir(dirname: str) -> multiset.Multiset:
 def jaccard_index(a: multiset.Multiset, b: multiset.Multiset) -> float:
     num = len(a.intersection(b))
     den = len(a.union(b))
-    return num / den if den else 0.0
+    return num / den if den else np.nan
 
 
-def main(argv):
-    try:
-        directories = argv[1:]
-        tags = [os.path.basename(d) for d in directories]
-        baseline_tag = tags[0]
-    except IndexError:
-        print(f"usage: {argv[0]} DIR1 DIR2 [DIR3 [...]]")
-        return
-    
-    print(f"using {baseline_tag} as baseline (tags: {tags})...")
-
-    headers = ['site/page'] + [f"|{t}|" for t in tags] + [f"JI({t1}/{t2})" for t1, t2 in itertools.combinations(tags, 2)]
-    print('\t'.join(headers))
-
-
+def node_bag_ji_distros(directories: Sequence[str]) -> pd.DataFrame:
+    tags = [os.path.basename(d) for d in directories]
+    scores = defaultdict(list)
     for stem, *dirs in walk_experiment_trees(directories):
         fields = [stem]
         bags = [get_node_bag_for_dir(d) for d in dirs]
@@ -91,22 +79,20 @@ def main(argv):
 
         for (t1, bag1), (t2, bag2) in itertools.combinations(zip(tags, bags), 2):
             ji = jaccard_index(bag1, bag2)
-            fields.append(str(ji))
-        
-        print('\t'.join(fields))
-        
-        """ for url, bag in baseline_bag_map.items():
-            for i, alt_dir in enumerate(tuples[1:]):
-                if alt_dir:
-                    alt_bag_map = get_node_bags_for_dir(alt_dir)
-                    if url in alt_bag_map:
-                        ji = jaccard_index(bag, alt_bag_map[url])
-                        print(f"{baseline_tag}:{tags[i+1]}\t{url}\tmatch\t{ji}")
-                    else:
-                        print(f"{baseline_tag}:{tags[i+1]}\t{url}\tmissing-url\t0.0")
-                else:
-                    print(f"{baseline_tag}:{tags[i+1]}\t{url}\tmissing-dir\t0.0") """
-        
+            scores[(t1, t2)].append(ji)
+
+    return pd.DataFrame(scores)
+
+
+def main(argv):
+    if len(argv) < 2:
+        print(f"usage: {argv[0]} DIR1 DIR2 [DIR3 [...]]")
+        return
+    
+    df = node_bag_ji_distros(argv[1:])
+    ax = df.plot.density(xlim=[0.0, 1.0])
+    fig = ax.get_figure()
+    fig.savefig('node_bag_ji_distros.pdf')
 
 
 if __name__ == "__main__":
