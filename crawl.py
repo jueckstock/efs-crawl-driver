@@ -13,7 +13,7 @@ REPLACEX = re.compile(r"[^-_a-zA-Z0-9]")
 TAG = os.environ.get("TAG", 'tag')
 PROFILE = os.environ.get("PROFILE", False)
 TIME_LIMIT = float(os.environ.get("TIME_LIMIT", 15.0))
-TIME_OUT = 5.0 #max(TIME_LIMIT, 1.0) * 2.0
+TIME_OUT = float(os.environ.get("TIME_OUT", max(TIME_LIMIT, 1.0) * 4))
 
 def main(argv):
     if len(sys.argv) == 1:
