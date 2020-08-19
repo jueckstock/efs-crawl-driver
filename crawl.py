@@ -14,6 +14,8 @@ TAG = os.environ.get("TAG", 'tag')
 PROFILE = os.environ.get("PROFILE", False)
 TIME_LIMIT = float(os.environ.get("TIME_LIMIT", 15.0))
 TIME_OUT = float(os.environ.get("TIME_OUT", max(TIME_LIMIT, 1.0) * 4))
+BROWSER_EXE = os.environ.get("BROWSER_EXE", "/home/jjuecks/brave/Static/brave")
+NPM_CWD = os.environ.get("NPM_CWD", "/home/jjuecks/brave/pagegraph-crawl")
 
 def main(argv):
     if len(sys.argv) == 1:
@@ -36,7 +38,7 @@ def main(argv):
             "crawl",
             "--",
             "-b",
-            "/home/jjuecks/brave/Static/brave",
+            BROWSER_EXE,
             "-o",
             os.path.abspath(collection_dir),
             "-t",
@@ -57,7 +59,7 @@ def main(argv):
 
         with open(log_filename, "wt", encoding="utf-8") as log:
             cmd_options = {
-                "cwd": "/home/jjuecks/brave/pagegraph-crawl",
+                "cwd": NPM_CWD,
                 "stdout": log,
                 "stderr": subprocess.STDOUT,
             }
