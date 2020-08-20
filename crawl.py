@@ -45,7 +45,7 @@ def main(argv):
             str(TIME_LIMIT),
             "-u",
             url,
-            "--debug=verbose",
+            "--debug=debug",
         ]
 
         if PROFILE == False:

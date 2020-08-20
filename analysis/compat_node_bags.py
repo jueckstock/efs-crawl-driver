@@ -21,7 +21,7 @@ def get_node_bag_for_dir(dirname: str) -> multiset.Multiset:
     for fn in glob.glob(os.path.join(dirname, "*.graphml")):
         graph = nx.read_graphml(fn)
         node_types = nx.get_node_attributes(graph, "node type")
-        html_nodes = [graph.nodes[k]["tag name"] for k, v in node_types.items() if v == "HTML element"]
+        html_nodes = [graph.nodes[k].get("tag name") for k, v in node_types.items() if v == "HTML element"]
         bag_map.update(Counter(html_nodes))
     return bag_map
 
