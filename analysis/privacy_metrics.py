@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 import csv
-import multiprocessing
 import itertools
+import multiprocessing
 import os
 import re
 import sys
 from collections import namedtuple
 from http import cookies
-from typing import Iterable, Sequence, Set, Tuple
+from typing import Iterable, Optional, Sequence, Set, Tuple
 from urllib.parse import parse_qsl, urlparse
 
-from loguru import logger
 import networkx as nx
 import numpy as np
 import pandas as pd
+from loguru import logger
 from publicsuffix2 import get_sld
 
 from common import graphs_in_dir, walk_experiment_trees
+
+SITE_THRESHOLD = int(os.environ.get("SITE_THRESHOLD", 5))
+PRIVACY_BASENAME = os.environ.get('PRIVACY_BASENAME', 'privacy_flows_cdf')
 
 HalfTokenTuple = namedtuple('HalfTokenTuple', ['http_etld1', 'key', 'value'])
 
@@ -49,7 +52,7 @@ def half_token_tuples_in_dir(directory: str) -> Iterable[HalfTokenTuple]:
                         yield HalfTokenTuple(http_etld1, "query:" + key, value)
                     
                     # key/value tokens from request headers (out-edges only)
-                    for n1, n2, eid, raw_headers in graph.out_edges(k, data="value", keys=True, default=""):
+                    for n1, n2, eid, raw_headers in graph.out_edges(k, data="headers", keys=True, default=""):
                         for _, key, value in raw_header_pairs(raw_headers, prefix_filter="raw-request"):
                             if key.lower() == "cookie":
                                 for morsel in cookies.SimpleCookie(value).values():
@@ -60,28 +63,47 @@ def half_token_tuples_in_dir(directory: str) -> Iterable[HalfTokenTuple]:
                     logger.exception("error handling HTTP resource:")
 
 
-def list_full_tokens_in_dir(directory: str) -> Set[TokenTuple]:
-    # hacks to extract tag/site-eTLD+1 from directory structure [tag is pretty much like that; site eTLD+1 could come from DOM root URLs if we have unified graphs]
-    tag = os.path.basename(os.path.dirname(os.path.dirname(directory)))
-    site_etld1 = os.path.basename(os.path.dirname(directory))
+def list_full_tokens_in_dir(directory: Optional[str]) -> Set[TokenTuple]:
+    if directory is not None:
+        # hacks to extract tag/site-eTLD+1 from directory structure [tag is pretty much like that; site eTLD+1 could come from DOM root URLs if we have unified graphs]
+        tag = os.path.basename(os.path.dirname(os.path.dirname(directory)))
+        site_etld1 = os.path.basename(os.path.dirname(directory))
 
-    return {TokenTuple(tag, site_etld1, h, k, v) for h, k, v in half_token_tuples_in_dir(directory)}
+        return {TokenTuple(tag, site_etld1, h, k, v) for h, k, v in half_token_tuples_in_dir(directory)}
+    
+    return set()
 
 
 def main(argv):
     if len(argv) < 2:
         print(f"usage: {argv[0]} DIR1 [DIR2 [DIR3 [...]]]")
         return
-    
     directories = argv[1:]
-    tags = [os.path.basename(d) for d in directories]
+    root_map = {os.path.basename(d): d for d in directories}
 
-    writer = csv.writer(sys.stdout, dialect='excel', lineterminator='\n')
-    writer.writerow(['tag', 'site_etld1', 'http_etld1', 'key', 'value'])
-    with multiprocessing.Pool(processes=len(directories)) as pool:
-        for _, *dirs in walk_experiment_trees(directories):
-            token_sets = pool.map(list_full_tokens_in_dir, dirs, chunksize=1)
-            writer.writerows(itertools.chain(*token_sets))
+    privacy_csv = f"{PRIVACY_BASENAME}.csv"
+    privacy_pdf = f"{PRIVACY_BASENAME}.pdf"
+
+    try:
+        df = pd.read_csv(privacy_csv)
+    except FileNotFoundError:
+        with open(privacy_csv, "w") as fd:
+            writer = csv.writer(fd, dialect='excel', lineterminator='\n')
+            writer.writerow(['tag', 'site_etld1', 'http_etld1', 'key', 'value'])
+            with multiprocessing.Pool(processes=len(directories)) as pool:
+                for _, *dirs in walk_experiment_trees(root_map):
+                    token_sets = pool.map(list_full_tokens_in_dir, dirs, chunksize=1)
+                    writer.writerows(itertools.chain(*token_sets))
+        df = pd.read_csv(privacy_csv)
+
+    counts = df.groupby(['http_etld1', 'key', 'value']).nunique()
+    distinctive_flows = counts[(counts.tag == 1) & (counts.site_etld1 > SITE_THRESHOLD)].index
+    privacy_tokens = df.set_index(['http_etld1', 'key', 'value']).loc[distinctive_flows]
+    trackability = privacy_tokens.reset_index().groupby(['http_etld1', 'tag']).site_etld1.nunique().unstack(fill_value=0)
+
+    ax = trackability.cumsum().plot()
+    fig = ax.get_figure()
+    fig.savefig(privacy_pdf)
 
 
 if __name__ == "__main__":

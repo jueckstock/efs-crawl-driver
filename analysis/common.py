@@ -5,7 +5,7 @@ import itertools
 import multiprocessing
 import os
 from collections import defaultdict
-from typing import Callable, Iterable, Sequence
+from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Mapping
 
 import multiset
 import networkx as nx
@@ -13,21 +13,24 @@ import numpy as np
 import pandas as pd
 
 
-def walk_experiment_trees(roots: Sequence[str]) -> Iterable[Sequence[str]]:
-    baseline_root = roots[0]
-    baseline_dirs = []
-    for node, dirs, files in os.walk(baseline_root):
-        if any(f.endswith(".graphml") for f in files):
-            baseline_dirs.append(node)
+def walk_experiment_trees(root_map: Mapping[str, str]) -> Iterable[Sequence[str]]:
+    graphml_dirs = defaultdict(dict)
+    for tag, root in root_map.items():
+        for node, _, files in os.walk(root):
+            if any(f.endswith(".graphml") for f in files):
+                stem = os.path.relpath(node, root)
+                pre_stem = node[:-len(stem)]
+                graphml_dirs[stem][tag] = node
+    
+    tags = list(root_map.keys())
+    for stem, dir_map in graphml_dirs.items():
+        yield [stem] + [dir_map.get(t) for t in tags]
 
-    for bd in baseline_dirs:
-        stem = os.path.relpath(bd, baseline_root)
-        yield [stem] + [(lambda d: d if os.path.isdir(d) else None)(os.path.join(r, stem)) for r in roots]
 
-
-def graphs_in_dir(directory: str) -> Iterable[nx.MultiDiGraph]:
-    for fn in glob.glob(os.path.join(directory, "*.graphml")):
-        yield nx.read_graphml(fn)
+def graphs_in_dir(directory: Optional[str]) -> Iterable[nx.MultiDiGraph]:
+    if directory is not None:
+        for fn in glob.glob(os.path.join(directory, "*.graphml")):
+            yield nx.read_graphml(fn)
 
 
 def jaccard_index(a: multiset.Multiset, b: multiset.Multiset) -> float:
@@ -36,16 +39,19 @@ def jaccard_index(a: multiset.Multiset, b: multiset.Multiset) -> float:
     return num / den if den else np.nan
 
 
-def parallel_ji_distros(directories: Sequence[str], bagger: Callable[[str], multiset.Multiset]) -> pd.DataFrame:
-    tags = [os.path.basename(d) for d in directories]
+def parallel_stats(root_map: Mapping[str, str], extractor: Callable[[Optional[str]], multiset.Multiset]) -> Iterable[Tuple[str, Sequence[Any]]]:
+    with multiprocessing.Pool(processes=len(root_map)) as pool:
+        for stem, *dirs in walk_experiment_trees(root_map):
+            things = pool.map(extractor, dirs, chunksize=1)
+            yield (stem, things)
+
+
+def parallel_ji_distros(root_map: Mapping[str, str], bagger: Callable[[Optional[str]], multiset.Multiset]) -> pd.DataFrame:
     scores = defaultdict(list)
-
-    with multiprocessing.Pool(processes=len(directories)) as pool:
-        for stem, *dirs in walk_experiment_trees(directories):
-            bags = pool.map(bagger, dirs, chunksize=1)
-
-            for (t1, bag1), (t2, bag2) in itertools.combinations(zip(tags, bags), 2):
-                ji = jaccard_index(bag1, bag2)
-                scores[(t1, t2)].append(ji)
+    tags = list(root_map)
+    for _, bags in parallel_stats(root_map, bagger):
+        for (t1, bag1), (t2, bag2) in itertools.combinations(zip(tags, bags), 2):
+            ji = jaccard_index(bag1, bag2)
+            scores[(t1, t2)].append(ji)
 
     return pd.DataFrame(scores)
