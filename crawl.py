@@ -6,6 +6,7 @@ import hashlib
 import random
 import re
 import string
+import threading
 from urllib.parse import urlparse
 
 REPLACEX = re.compile(r"[^-_a-zA-Z0-9]")
@@ -14,8 +15,35 @@ TAG = os.environ.get("TAG", 'tag')
 PROFILE = os.environ.get("PROFILE", False)
 TIME_LIMIT = float(os.environ.get("TIME_LIMIT", 15.0))
 TIME_OUT = float(os.environ.get("TIME_OUT", max(TIME_LIMIT, 1.0) * 4))
+TIME_TO_KILL = float(os.environ.get("TIME_TO_KILL", 5.0))
 BROWSER_EXE = os.environ.get("BROWSER_EXE", "/home/jjuecks/brave/Static/brave")
 NPM_CWD = os.environ.get("NPM_CWD", "/home/jjuecks/brave/pagegraph-crawl")
+
+
+def run_with_timeout(cmd_argv, **cmd_options):
+    time_out_limit = cmd_options.pop("TIME_OUT", 60.0)
+    time_to_kill_limit = cmd_options.pop("TIME_TO_KILL", 5.0)
+
+    status = None
+    with subprocess.Popen(cmd_argv, **cmd_options) as proc:
+        try:
+            status = proc.wait(timeout=time_out_limit)
+            if status != 0:
+                print(f"ERROR: status={status}", flush=True)
+        except subprocess.TimeoutExpired:
+            proc.terminate() # soft-kill (to let node clean up the browser processes)
+            print("TIMEOUT", flush=True)
+            try:
+                proc.wait(timeout=time_to_kill_limit)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                print("HARD-KILLED", flush=True)
+        except:
+            proc.kill() # hard-kill since this is something bad/fatal
+            raise
+    # remember: implicit proc.wait() on __exit__ from with statement
+    return status
+
 
 def main(argv):
     if len(sys.argv) == 1:
@@ -62,18 +90,10 @@ def main(argv):
                 "cwd": NPM_CWD,
                 "stdout": log,
                 "stderr": subprocess.STDOUT,
+                "TIME_OUT": TIMEOUT,
+                "TIME_TO_KILL": TIME_TO_KILL,
             }
-            with subprocess.Popen(cmd_argv, **cmd_options) as proc:
-                try:
-                    status = proc.wait(timeout=TIME_OUT)
-                    if status != 0:
-                        print(f"WARNING: status={status}", flush=True)
-                except subprocess.TimeoutExpired:
-                    proc.terminate() # soft-kill (to let node clean up the browser processes)
-                    print("TIMEOUT", flush=True)
-                except:
-                    proc.kill() # hard-kill since this is something bad/fatal
-                    raise
+            run_with_timeout(cmd_argv, **cmd_options)
 
 
 if __name__ == "__main__":
