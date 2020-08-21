@@ -90,7 +90,7 @@ def main(argv):
                 "cwd": NPM_CWD,
                 "stdout": log,
                 "stderr": subprocess.STDOUT,
-                "TIME_OUT": TIMEOUT,
+                "TIME_OUT": TIME_OUT,
                 "TIME_TO_KILL": TIME_TO_KILL,
             }
             run_with_timeout(cmd_argv, **cmd_options)
