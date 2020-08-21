@@ -12,7 +12,7 @@ from publicsuffix2 import get_sld
 
 from common import walk_experiment_trees, jaccard_index, parallel_ji_distros
 
-REQUEST_BAG_BASENAME = os.environ.get('REQUEST_BAG_BASENAME', 'request_bag_ji_distros')
+BASENAME = os.environ.get('BASENAME', 'request_bag_ji_distros')
 
 
 def get_request_bag_for_dir(dirname: Optional[str]) -> multiset.Multiset:
@@ -33,14 +33,17 @@ def main(argv):
     if len(argv) < 2:
         print(f"usage: {argv[0]} DIR1 DIR2 [DIR3 [...]]")
         return
-    
-    request_bag_csv = f"{REQUEST_BAG_BASENAME}.csv"
-    request_bag_pdf = f"{REQUEST_BAG_BASENAME}.pdf"
+    directories = argv[1:]
+    tags = [os.path.basename(d) for d in directories]
+    root_map = dict(zip(tags, directories))
+
+    request_bag_csv = f"{BASENAME}.csv"
+    request_bag_pdf = f"{BASENAME}.pdf"
     
     try:
         request_bag_df = pd.read_csv(request_bag_csv)
     except FileNotFoundError:
-        request_bag_df = parallel_ji_distros(argv[1:], bagger=get_request_bag_for_dir)
+        request_bag_df = parallel_ji_distros(root_map, bagger=get_request_bag_for_dir)
         request_bag_df.to_csv(request_bag_csv)
 
     ax = request_bag_df.plot.density(xlim=[0.0, 1.0])

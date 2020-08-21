@@ -12,10 +12,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from common import parallel_stats
+from common import parallel_stats, get_profile_groups, rank_distinguished_items
 from compat_node_bags import get_node_bag_for_dir
 
-NODE_BAG_BASENAME = os.environ.get('NODE_BAG_BASENAME', 'node_bag_base')
+BASENAME = os.environ.get('BASENAME', 'node_bag_base')
+TOP_COUNT = int(os.environ.get("TOP_COUNT", 50))
 
 
 def main(argv):
@@ -25,8 +26,9 @@ def main(argv):
     directories = argv[1:]
     tags = [os.path.basename(d) for d in directories]
     root_map = dict(zip(tags, directories))
+    profile_groups = get_profile_groups(root_map)
 
-    node_bag_csv = f"{NODE_BAG_BASENAME}.csv"
+    node_bag_csv = f"{BASENAME}.csv"
     try:
         node_bag_df = pd.read_csv(node_bag_csv)
     except FileNotFoundError:
@@ -38,27 +40,23 @@ def main(argv):
         node_bag_df = pd.DataFrame(rows, columns=['stem', 'tag', 'profile', 'value'])
         node_bag_df.to_csv(node_bag_csv, index=False, header=True)
     
-    for node_type in node_bag_df.tag.value_counts().iloc[:50].index:
+    # compute the TOP_COUNT-most-distinguished tag names using a hacky little in/cross-group variance measure
+    ddf = rank_distinguished_items(node_bag_df, ['tag', 'profile'], 'value', profile_groups)
+    print(ddf)
+    top_items = list(ddf.index[:TOP_COUNT])
+
+    for node_type in top_items:
         cdf = node_bag_df[node_bag_df.tag == node_type].set_index(['stem', 'tag', 'profile']).unstack(fill_value=0).cumsum()
         ax = cdf.plot(title=f"Per-Profile CDF of '{node_type}' HTML nodes seen")
         fig = ax.get_figure()
-        fig.savefig(f"{NODE_BAG_BASENAME}_{node_type}.pdf")
+        fig.savefig(f"{BASENAME}_{node_type}.pdf")
         plt.close(fig)
     
     cdf = node_bag_df.groupby(['stem', 'profile']).sum().unstack().cumsum()
     ax = cdf.plot(title=f"Per-Profile CDF of all HTML nodes seen")
     fig = ax.get_figure()
-    fig.savefig(f"{NODE_BAG_BASENAME}_GRAND_TOTAL.pdf")
+    fig.savefig(f"{BASENAME}_GRAND_TOTAL.pdf")
     plt.close(fig)
-
-    """ sums = node_bag_df.groupby(['tag', 'profile']).sum().unstack(fill_value=0)
-    means = sums.transpose().mean()
-    diffs = {}
-    for col in sums.columns:
-        diffs[col] = sums[col] - means
-    ddf = pd.DataFrame(diffs)
-    ddf.transpose().product() """
-    
 
 
 if __name__ == "__main__":

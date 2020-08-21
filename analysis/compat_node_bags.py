@@ -13,7 +13,7 @@ import pandas as pd
 
 from common import parallel_ji_distros
 
-NODE_BAG_BASENAME = os.environ.get('NODE_BAG_BASENAME', 'node_bag_ji_distros')
+BASENAME = os.environ.get('BASENAME', 'node_bag_ji_distros')
 
 
 def get_node_bag_for_dir(dirname: Optional[str]) -> multiset.Multiset:
@@ -32,10 +32,11 @@ def main(argv):
         print(f"usage: {argv[0]} DIR1 DIR2 [DIR3 [...]]")
         return
     directories = argv[1:]
+    tags = [os.path.basename(d) for d in directories]
     root_map = dict(zip(tags, directories))
 
-    node_bag_csv = f"{NODE_BAG_BASENAME}.csv"
-    node_bag_pdf = f"{NODE_BAG_BASENAME}.pdf"
+    node_bag_csv = f"{BASENAME}.csv"
+    node_bag_pdf = f"{BASENAME}.pdf"
     
     try:
         node_bag_df = pd.read_csv(node_bag_csv)
