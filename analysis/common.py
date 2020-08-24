@@ -53,7 +53,7 @@ def parallel_ji_distros(root_map: Mapping[str, str], bagger: Callable[[Optional[
     for _, bags in parallel_stats(root_map, bagger):
         for (t1, bag1), (t2, bag2) in itertools.combinations(zip(tags, bags), 2):
             ji = jaccard_index(bag1, bag2)
-            scores[(t1, t2)].append(ji)
+            scores[f"{t1}/{t2}"].append(ji)
 
     return pd.DataFrame(scores)
 
