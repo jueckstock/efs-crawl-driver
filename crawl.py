@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import hashlib
+import json
 import os
 import random
 import re
@@ -19,6 +20,7 @@ TIME_OUT = float(os.environ.get("TIME_OUT", max(TIME_LIMIT, 1.0) * 4))
 TIME_TO_KILL = float(os.environ.get("TIME_TO_KILL", 5.0))
 BROWSER_EXE = os.environ.get("BROWSER_EXE", "/home/jjuecks/brave/Static/brave")
 NPM_CWD = os.environ.get("NPM_CWD", "/home/jjuecks/brave/pagegraph-crawl")
+CHROME_ARGS = json.loads(os.environ.get("CHROME_ARGS", "[]"))
 
 
 def run_with_timeout(cmd_argv, **cmd_options):
@@ -87,6 +89,8 @@ def main(argv):
             "-u",
             url,
             "--debug=debug",
+            "-x",
+            json.dumps(CHROME_ARGS),
         ]
 
         if PROFILE == False:
