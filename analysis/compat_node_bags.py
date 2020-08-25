@@ -11,19 +11,17 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from common import parallel_ji_distros
+from common import parallel_ji_distros, find_3p_nonad_graphs
 
 BASENAME = os.environ.get('BASENAME', 'node_bag_ji_distros')
 
 
 def get_node_bag_for_dir(dirname: Optional[str]) -> multiset.Multiset:
     bag_map = multiset.Multiset()
-    if dirname is not None:
-        for fn in glob.glob(os.path.join(dirname, "*.graphml")):
-            graph = nx.read_graphml(fn)
-            node_types = nx.get_node_attributes(graph, "node type")
-            html_nodes = [graph.nodes[k].get("tag name") for k, v in node_types.items() if v == "HTML element"]
-            bag_map.update(Counter(html_nodes))
+    for graph in find_3p_nonad_graphs(dirname):
+        node_types = nx.get_node_attributes(graph, "node type")
+        html_nodes = [graph.nodes[k].get("tag name") for k, v in node_types.items() if v == "HTML element"]
+        bag_map.update(Counter(html_nodes))
     return bag_map
 
 

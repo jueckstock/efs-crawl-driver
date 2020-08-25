@@ -2,16 +2,38 @@
 """
 import glob
 import itertools
+import json
 import multiprocessing
 import os
 import re
-from collections import defaultdict
-from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Mapping
+import subprocess
+from collections import defaultdict, namedtuple
+from typing import (Any, Callable, Iterable, Mapping, Optional, Sequence,
+                    Tuple, Union)
+from xml.etree import ElementTree
 
 import multiset
 import networkx as nx
 import numpy as np
 import pandas as pd
+from loguru import logger
+
+PageGraphMetadata = namedtuple('PageGraphMetadata', ['version', 'url', 'is_root', 'timespan'])
+
+
+def get_graphml_meta(graphml_file: str) -> PageGraphMetadata:
+    ns = {'g': 'http://graphml.graphdrawing.org/xmlns'}
+    etree = ElementTree.parse(graphml_file)
+    root = etree.getroot()
+    desc = root.find('g:desc', ns)
+    is_root_text = desc.find('g:is_root', ns).text
+    time_start_text = desc.find('g:time/g:start', ns).text
+    time_end_text = desc.find('g:time/g:end', ns).text
+    return PageGraphMetadata(
+        desc.find('g:version', ns).text,
+        desc.find('g:url', ns).text, 
+        is_root_text == "true",
+        (float(time_start_text), float(time_end_text)))
 
 
 def walk_experiment_trees(root_map: Mapping[str, str]) -> Iterable[Sequence[str]]:
@@ -28,10 +50,86 @@ def walk_experiment_trees(root_map: Mapping[str, str]) -> Iterable[Sequence[str]
         yield [stem] + [dir_map.get(t) for t in tags]
 
 
-def graphs_in_dir(directory: Optional[str]) -> Iterable[nx.MultiDiGraph]:
+def graphs_in_dir(directory: Optional[str], with_filename: bool = False) -> Iterable[Union[nx.MultiDiGraph, Tuple[nx.MultiDiGraph, str]]]:
     if directory is not None:
         for fn in glob.glob(os.path.join(directory, "*.graphml")):
-            yield nx.read_graphml(fn)
+            if with_filename:
+                yield nx.read_graphml(fn), fn
+            else:
+                yield nx.read_graphml(fn)
+
+
+ABRC_EXE = os.environ.get("ABRC_EXE", os.path.join(os.path.dirname(__file__), "..", "abrc", "target", "release", "abrc"))
+ABRC_FSF = os.environ.get("ABRC_FSF", "filterset.dat")
+
+RE_FRAME_ID = re.compile(r"^page_graph_([0-9A-Fa-f]{32})\.(\d+)\.graphml$")
+
+FrameRoot = namedtuple('FrameRoot', ['graph', 'frame_url', 'site_url'])
+
+
+def filter_frame_loaders(frame_roots: Sequence[FrameRoot]) -> Sequence[bool]:
+    if not frame_roots:
+        return []
+    
+    json_input = "\n".join(json.dumps({"url": f.frame_url, "source_url": f.site_url, "request_type": "sub_frame"}) for f in frame_roots)
+    proc = subprocess.run([ABRC_EXE, "filter", "-f", ABRC_FSF], input=json_input, capture_output=True, check=True, encoding="utf8")
+    return list(map(json.loads, proc.stdout.split()))
+
+
+RE_URL_TAG = re.compile(rb"<url>([^<>]+)</url>")
+
+
+def find_3p_nonad_graphs(directory: Optional[str]) -> list:
+    """this is kind of hacky/broken right now, but so is our data and I'm tired of dealing with it"""
+    from xml.sax.saxutils import unescape
+    sub_frames = []
+    if directory:
+        origin_host = os.path.basename(os.path.dirname(directory))
+        origin_url = f"https://{origin_host}/"
+        
+        for graph, filename in graphs_in_dir(directory, with_filename=True):
+            with open(filename, "rb") as fd:
+                blob = fd.read()
+                is_root = b"<is_root>true</is_root>" in blob
+                raw_url = RE_URL_TAG.search(blob).group(1)
+                root_url = unescape(raw_url.decode('utf8'))
+            #meta = get_graphml_meta(filename)
+            if not is_root: #meta.is_root:
+                sub_frames.append(FrameRoot(graph, root_url, origin_url)) #meta.url, origin_url))
+    
+    frame_ad_matches = filter_frame_loaders(sub_frames)
+    return [sf.graph for sf, ad in zip(sub_frames, frame_ad_matches) if not ad]
+
+    """ gmap = defaultdict(dict)
+    fmap = defaultdict(dict)
+    for graph, filename in graphs_in_dir(directory, with_filename=True):
+        meta = get_graphml_meta(filename)
+        m = RE_FRAME_ID.match(os.path.basename(filename))
+        frame_id = m.group(1)
+        frame_version = m.group(2)
+        gmap[frame_id][frame_version] = (meta, graph)
+
+        if meta.is_root:
+            fmap[frame_id][frame_version] = meta.url
+        
+        for n, nt in graph.nodes(data="node type"):
+            if nt == "remote frame":
+                rfid = graph.nodes[n]["frame id"]
+                fmap[rfid][-1] = meta.url
+    
+    sub_frames = []
+    for frame_id, versions in gmap.items():
+        for frame_version, (frame_meta, frame_graph) in versions.items():
+            if not frame_meta.is_root:
+                site_url = fmap[frame_id].get(-1)
+                if not site_url:
+                    logger.warning(f"mystery frame '{frame_id}' has no known site_url? (in {directory})")
+                else:
+                    frame_url = frame_meta.url
+                    sub_frames.append(FrameRoot(frame_graph, frame_url, site_url))
+    
+    frame_ad_matches = filter_frame_loaders(sub_frames)
+    return [sf.graph for sf, ad in zip(sub_frames, frame_ad_matches) if not ad] """
 
 
 def jaccard_index(a: multiset.Multiset, b: multiset.Multiset) -> float:
