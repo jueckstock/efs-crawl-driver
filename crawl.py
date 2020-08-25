@@ -48,18 +48,6 @@ def run_with_timeout(cmd_argv, **cmd_options):
     return status
 
 
-def wait_for_profile_unlock(profile_path: str):
-    profile_name = os.path.basename(profile_path)
-    lock_path = os.path.join(profile_path, "SingletonLock")
-    while True:
-        try:
-            os.readlink(lock_path)
-        except FileNotFoundError:
-            return
-        print(f"Waiting for profile '{profile_name}' to unlock...")
-        time.sleep(1.0)
-
-
 def main(argv):
     if len(sys.argv) == 1:
         print(f"usage: {argv[0]} [URL1 [URL2 [...]]]")
@@ -101,7 +89,6 @@ def main(argv):
             cmd_argv += [
                 "-e", PROFILE
             ]
-            wait_for_profile_unlock(PROFILE)
 
         with open(log_filename, "wt", encoding="utf-8") as log:
             cmd_options = {
