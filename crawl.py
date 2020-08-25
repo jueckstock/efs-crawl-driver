@@ -41,7 +41,8 @@ def run_with_timeout(cmd_argv, **cmd_options):
             except subprocess.TimeoutExpired:
                 proc.kill()
                 print("HARD-KILLED", flush=True)
-        except:
+        except Exception as err:
+            print(f"FALLING-SKIES: error={err}", flush=True)
             proc.kill() # hard-kill since this is something bad/fatal
             raise
     # remember: implicit proc.wait() on __exit__ from with statement
