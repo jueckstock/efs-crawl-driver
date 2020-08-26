@@ -8,14 +8,9 @@ fi
 
 TOTAL_LOGS=$(find "$ROOT" -name "crawl.log" | wc -l)
 
-ERROR_LOG_FILES=$(find "$ROOT" -name "crawl.log" | xargs grep -o "^ERROR .*" | cut -d: -f1 | sort -u)
-FATAL_LOG_FILES=$(find "$ROOT" -name "crawl.log" | xargs grep -o "FATAL:[^:][^:]*:.*" | cut -d: -f1 | sort -u)
-# warning: this is not quite complete (wait for PG_LOG_ASSERT build to be used), but it's _close_
-PG_FATAL_LOG_FILES=$(find "$ROOT" -name "crawl.log" | xargs grep -o "FATAL:page_graph.*" | cut -d: -f1 | sort -u)
-
 (find "$ROOT" -name "crawl.log" | xargs grep -o "^ERROR .*" | cut -d: -f1 | sort -u >tmp_error_logs.txt) || exit 1
 (find "$ROOT" -name "crawl.log" | xargs grep -o "FATAL:[^:][^:]*:.*" | cut -d: -f1 | sort -u >tmp_fatal_logs.txt) || exit 1
-(find "$ROOT" -name "crawl.log" | xargs grep -o "FATAL:page_graph.*" | cut -d: -f1 | sort -u >tmp_pg_fatal_logs.txt) || exit 1
+(find "$ROOT" -name "crawl.log" | xargs grep -o "\*PageGraph\* Assert failed: .*" | cut -d: -f1 | sort -u >tmp_pg_fatal_logs.txt) || exit 1
 
 ALL_ISSUE_COUNT=$(comm --total -123 tmp_error_logs.txt tmp_fatal_logs.txt | awk '{print $1 + $2 + $3}')
 ERROR_ONLY_COUNT=$(comm -23 tmp_error_logs.txt tmp_fatal_logs.txt | wc -l)
