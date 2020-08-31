@@ -62,7 +62,12 @@ def main(argv):
         random_tag = hashlib.md5(url.encode('utf8')).hexdigest()
         collection_dir = os.path.join(TAG, hostname, f"{munged_url}.{random_tag}")
 
-        os.makedirs(collection_dir, exist_ok=False)
+        try:
+            os.makedirs(collection_dir, exist_ok=False)
+        except FileExistsError:
+            print(f"Ugh, duplicate URL: '{url}' (skipping)")
+            continue
+
         log_filename = os.path.join(collection_dir, "crawl.log")
         print(f"Crawling '{url}' (dir={collection_dir})...", flush=True)
 
