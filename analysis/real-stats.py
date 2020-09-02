@@ -20,9 +20,18 @@ def main(argv):
         return
     
     df = pd.read_csv(csv_file)
-    if 'is_root' in df.columns:
-        df = df[(df.is_root == False) & (df.is_ad == True)].drop(['is_root', 'is_ad'], axis=1)
 
+    # if this is has root/is-ad metadata, filter to 3p-no-ad and drop those columns
+    if 'is_root' in df.columns:
+        df = df[(df.is_root == False) & (df.is_ad == False)].drop(['is_root', 'is_ad'], axis=1)
+    
+    # filter out graphs with no nodes (broken crawls)
+    df = df[df.total_nodes > 0].dropna()
+
+    # sum all stats within a site-visit (per profile)
+    #df = df.groupby(['site_tag', 'profile_tag']).sum().reset_index()
+
+    # perform distribution-difference test/post-hoc analysis across profiles
     alpha = 0.05
     df3pg = df.groupby(['site_tag', 'profile_tag'])
     for col_name in col_names:
