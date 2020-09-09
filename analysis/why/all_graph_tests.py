@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import sys
+from collections import defaultdict
 from functools import reduce
 
 import pandas as pd
@@ -24,9 +25,12 @@ def main(argv):
 
     # optional per-site-tag error data used to filter out rows from URLs that encountered errors
     if len(argv) > 2:
-        err_df = pd.read_csv(argv[2]).set_index('site_tag').drop(['order', 'crawl_url'], axis=1).transpose().any().transpose()
+        url_df = pd.read_csv(argv[2])
+        err_df = url_df.set_index('site_tag').drop(['order', 'crawl_url'], axis=1).transpose().any().transpose()
         err_df = err_df[err_df == False]
         orig_df = orig_df[orig_df.site_tag.isin(err_df.index)]
+    else:
+        url_df = None
     
     # augment with eTLD+1 extracted from site-tag (i.e., from the crawl URL hostname)
     orig_df['site_etld1'] = orig_df['site_tag'].apply(lambda x: get_sld(x.split('/')[0]))
@@ -42,6 +46,57 @@ def main(argv):
 
     # 3p-ad graphs (just for fun)
     zdf = orig_df[(orig_df.is_root == False) & (orig_df.is_ad == True)].drop(['is_root', 'is_ad'], axis=1)
+
+
+    # TEST: can we identify "first-use" subsets for each (profile/frame-etld1) tuple?
+    #--------------------------------------------------------------------------------
+    assert url_df is not None, "need URL list for order information..."
+    FIELDS = """profile_tag,url_etld1,total_nodes,total_edges,total_dom_nodes,total_remote_frames,touched_dom_nodes,completed_requests,event_listenings,post_storage_script_edges,post_storage_console_errors""".split(",")
+
+
+    for (dataset_label, wutdf) in [("3p-no-ad", tdf), ("3p-ad-only", zdf)]:
+        mongo_df = wutdf.join(url_df.set_index("site_tag"), on="site_tag").sort_values('order')
+
+        # sub-set test: (global-first-median, site-first-median, overall-median) comparisons? [bust]
+        """ global_firsts = [] #defaultdict(list)
+        site_firsts = [] #defaultdict(list)
+        for (url_etld1, profile_tag), records in mongo_df.groupby(['url_etld1', 'profile_tag']):
+            ordered_records = records.sort_values('order')
+            global_firsts.append(ordered_records.iloc[0][FIELDS])
+            for site_etld1, site_records in ordered_records.groupby("site_etld1"):
+                site_firsts.append(site_records.sort_values('order').iloc[0][FIELDS])
+        gfdf = pd.DataFrame(global_firsts)
+        sfdf = pd.DataFrame(site_firsts)
+        print(gfdf.groupby('profile_tag').median())
+        print(sfdf.groupby('profile_tag').median())
+        print(mongo_df[FIELDS].groupby('profile_tag').median()) """
+
+        global_firsts = []
+        site_firsts = []
+        for (url_etld1, profile_tag), records in mongo_df.groupby(['url_etld1', 'profile_tag']):
+            ordered_records = records.sort_values('order')
+            global_firsts.append(ordered_records.iloc[0][FIELDS])
+            for site_etld1, site_records in ordered_records.groupby("site_etld1"):
+                site_firsts.append(site_records.sort_values('order').iloc[0][FIELDS])
+        gfdf = pd.DataFrame(global_firsts)
+        sfdf = pd.DataFrame(site_firsts)
+
+        for field in FIELDS[2:]:
+            fig, axen = plt.subplots(3, 1, sharex=True)
+            gfdf.groupby(['url_etld1', 'profile_tag'])[field].sum().unstack(fill_value=0).cumsum().plot(ax=axen[0], title="Global-First Use", legend=False)
+            sfdf.groupby(['url_etld1', 'profile_tag'])[field].sum().unstack(fill_value=0).cumsum().plot(ax=axen[1], title="Site-First Use", legend=False)
+            mongo_df.groupby(['url_etld1', 'profile_tag'])[field].sum().unstack(fill_value=0).cumsum().plot(ax=axen[2], title="All Use", legend=False)
+            handles, labels = axen[0].get_legend_handles_labels()
+            fig.tight_layout()
+            fig.legend(handles, labels, loc=(0, -0.01), ncol=4)
+            fig.suptitle(f"Temporal Analysis of '{field}' ({dataset_label})")
+            fig.savefig(f"{csv_stem}_temporal_{dataset_label}_{field}.pdf")
+            plt.close(fig)
+    
+
+    return
+    #--------------------------------------------------------------------------------
+    # END TEST
 
     # computation: turn into graph counts
     c_adf = graph_counts_by_profile(adf)
