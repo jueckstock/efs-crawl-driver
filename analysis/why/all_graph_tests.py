@@ -71,15 +71,21 @@ def main(argv):
         print(sfdf.groupby('profile_tag').median())
         print(mongo_df[FIELDS].groupby('profile_tag').median()) """
 
-        global_firsts = []
-        site_firsts = []
-        for (url_etld1, profile_tag), records in mongo_df.groupby(['url_etld1', 'profile_tag']):
+        global_firsts = set()
+        site_firsts = set()
+        for (url_etld1, profile_tag), records in mongo_df[['order', 'site_tag', 'site_etld1', 'url_etld1', 'profile_tag']].groupby(['url_etld1', 'profile_tag']):
             ordered_records = records.sort_values('order')
-            global_firsts.append(ordered_records.iloc[0][FIELDS])
+            global_firsts.add((ordered_records.iloc[0].site_tag, url_etld1))
             for site_etld1, site_records in ordered_records.groupby("site_etld1"):
-                site_firsts.append(site_records.sort_values('order').iloc[0][FIELDS])
-        gfdf = pd.DataFrame(global_firsts)
-        sfdf = pd.DataFrame(site_firsts)
+                site_firsts.add((site_records.sort_values('order').iloc[0].site_tag, url_etld1))
+        
+
+        gfdf = mongo_df.set_index(['site_tag', 'url_etld1']).loc[pd.MultiIndex.from_tuples(global_firsts)].reset_index()[FIELDS]
+        sfdf = mongo_df.set_index(['site_tag', 'url_etld1']).loc[pd.MultiIndex.from_tuples(site_firsts)].reset_index()[FIELDS]
+        #gfdf = pd.DataFrame([mongo_df.where((mongo_df.site_tag == site_tag) & (mongo_df.url_etld1 == url_etld1))[FIELDS] for (site_tag, url_etld1) in global_firsts])
+        #sfdf = pd.DataFrame([mongo_df.where((mongo_df.site_tag == site_tag) & (mongo_df.url_etld1 == url_etld1))[FIELDS] for (site_tag, url_etld1) in site_firsts])
+        #print(gfdf)
+        #print(len(site_firsts))
 
         for field in FIELDS[2:]:
             fig, axen = plt.subplots(3, 1, sharex=True)
