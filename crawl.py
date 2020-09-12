@@ -29,7 +29,7 @@ def run_with_timeout(cmd_argv, **cmd_options):
     time_to_kill_limit = cmd_options.pop("TIME_TO_KILL", 5.0)
 
     status = None
-    proc = subprocess.Popen(cmd_argv, start_new_session=True, **cmd_options):
+    proc = subprocess.Popen(cmd_argv, start_new_session=True, **cmd_options)
     
     try:
         status = proc.wait(timeout=time_out_limit)
