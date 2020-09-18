@@ -67,9 +67,9 @@ def main(argv):
         ax = by_node.plot.box(title=f"Node-Bag Similarity [0.0-1.0] Score Distributions\n({stability_algo}[{T1:.2f}]: {node_ratio:.2%})", ylim=YRANGE)
         save_ax_pdf(ax, f"{csv_stem}_nodes_box_{stability_algo}.pdf", no_xticks=False)
         
-        ax = (by_edge.cumsum() / len(by_edge)).plot(title=f"Cumulative Edge-Bag Similarity [0.0-1.0] Scores\n({stability_algo}[{T1:.2f}]: {node_ratio:.2%})", ylim=YRANGE)
+        ax = (by_edge.cumsum() / len(by_edge)).plot(title=f"Cumulative Edge-Bag Similarity [0.0-1.0] Scores\n({stability_algo}[{T1:.2f}]: {edge_ratio:.2%})", ylim=YRANGE)
         save_ax_pdf(ax, f"{csv_stem}_edges_sum_{stability_algo}.pdf")
-        ax = by_edge.plot.box(title=f"Edge-Bag Similarity [0.0-1.0] Score Distributions\n({stability_algo}[{T1:.2f}]: {node_ratio:.2%})", ylim=YRANGE)
+        ax = by_edge.plot.box(title=f"Edge-Bag Similarity [0.0-1.0] Score Distributions\n({stability_algo}[{T1:.2f}]: {edge_ratio:.2%})", ylim=YRANGE)
         save_ax_pdf(ax, f"{csv_stem}_edges_box_{stability_algo}.pdf", no_xticks=False)
 
 
