@@ -11,6 +11,7 @@ from collections import defaultdict
 import numpy as np
 from multiset import Multiset
 
+FIXED_NODE_SET = os.environ.get("FIXED_NODE_SET", None)
 SET_CLASS = Multiset if os.environ.get("MULTISET", False) else set
 
 RE_NODE_PATTERN = re.compile("^(\w+)(?:\[|$)")
@@ -63,42 +64,55 @@ def load_set(file_name: str, allowed_nodes: list = ALL_NODE_TYPES) -> SET_CLASS:
             if not m:
                 raise ValueError(f"unexpected set member type ({line})")
             #print(m.groups(), file=sys.stderr)
-            if ok_func(m):
+            if ok_func(m, allowed_nodes):
                 s.add(line)
     
     return s
 
 
+def process_directories(url_files: list, allowed_node_types: list):
+    for url_file in url_files:
+        #print(url_file, file=sys.stderr)
+        *_, hostname, crawl_url_tag, _, _ = url_file.split(os.sep)
+        site_tag = os.path.join(hostname, crawl_url_tag)
+        with open(url_file, "rt", encoding="utf8") as fd:
+            frame_url = fd.read().strip()
+        
+        work_dir = os.path.dirname(url_file)
+        nbags = {}
+        for bf in glob.glob(os.path.join(work_dir, "*.nbag")):
+            p = os.path.splitext(os.path.basename(bf))[0]
+            nbags[p] = load_set(bf, allowed_node_types)
+        
+        ebags = {}
+        for bf in glob.glob(os.path.join(work_dir, "*.ebag")):
+            p = os.path.splitext(os.path.basename(bf))[0]
+            ebags[p] = load_set(bf, allowed_node_types)
+
+        profiles = list(sorted(nbags.keys()))
+        for p1, p2 in itertools.combinations(profiles, 2):
+            nji = jaccard_index(nbags[p1], nbags[p2])
+            eji = jaccard_index(ebags[p1], ebags[p2])
+            yield (site_tag, frame_url, p1, p2, nji, eji)
+
+
 def main(argv):
+    url_files = argv[1:]
     wtr = csv.writer(sys.stdout, lineterminator="\n")
-    wtr.writerow(['node_mask', 'site_tag', 'frame_url', 'p1', 'p2', 'node_jaccard', 'edge_jaccard'])
-    for allowed_bits in itertools.product(range(2), repeat=len(ALL_NODE_TYPES)):
-        allowed_node_mask = ''.join(map(str, allowed_bits))
-        allowed_node_types = [ALL_NODE_TYPES[i] for i, b in enumerate(allowed_bits) if b]
-
-        for url_file in argv[1:]:
-            #print(url_file, file=sys.stderr)
-            *_, hostname, crawl_url_tag, _, _ = url_file.split(os.sep)
-            site_tag = os.path.join(hostname, crawl_url_tag)
-            with open(url_file, "rt", encoding="utf8") as fd:
-                frame_url = fd.read().strip()
-            
-            work_dir = os.path.dirname(url_file)
-            nbags = {}
-            for bf in glob.glob(os.path.join(work_dir, "*.nbag")):
-                p = os.path.splitext(os.path.basename(bf))[0]
-                nbags[p] = load_set(bf, allowed_node_types)
-            
-            ebags = {}
-            for bf in glob.glob(os.path.join(work_dir, "*.ebag")):
-                p = os.path.splitext(os.path.basename(bf))[0]
-                ebags[p] = load_set(bf, allowed_node_types)
-
-            profiles = list(sorted(nbags.keys()))
-            for p1, p2 in itertools.combinations(profiles, 2):
-                nji = jaccard_index(nbags[p1], nbags[p2])
-                eji = jaccard_index(ebags[p1], ebags[p2])
-                wtr.writerow([allowed_node_mask, site_tag, frame_url, p1, p2, nji, eji])
+    if FIXED_NODE_SET is not None:
+        requested_node_types = set(FIXED_NODE_SET.split('/'))
+        ordered_node_types = [t for t in ALL_NODE_TYPES if t in requested_node_types]
+        
+        wtr.writerow(['site_tag', 'frame_url', 'p1', 'p2', 'node_jaccard', 'edge_jaccard'])
+        for stats_row in process_directories(url_files, ordered_node_types):
+            wtr.writerow(stats_row)
+    else:
+        wtr.writerow(['node_mask', 'site_tag', 'frame_url', 'p1', 'p2', 'node_jaccard', 'edge_jaccard'])
+        for allowed_bits in itertools.product(range(2), repeat=len(ALL_NODE_TYPES)):
+            allowed_node_mask = ''.join(map(str, allowed_bits))
+            allowed_node_types = [ALL_NODE_TYPES[i] for i, b in enumerate(allowed_bits) if b]
+            for stats_row in process_directories(url_files, allowed_node_types):
+                wtr.writerow((allowed_node_mask,) + stats_row)
 
 
 if __name__ == "__main__":
