@@ -27,8 +27,8 @@ def stable2(df: pd.DataFrame) -> pd.DataFrame:
 
 STABLES = {
     'raw': stable0,
-    'vanilla-self': stable1,
-    'vanilla-fullblock': stable2,
+    #'vanilla-self': stable1,
+    'high-confidence': stable2,
 }
 
 
@@ -57,9 +57,13 @@ def main(argv):
         if ROOT:
             df = df[df.is_root == True].drop(['is_root', 'is_ad'], axis=1)
             csv_stem += "_root"
+            subset = "Root/1p Frames"
         else:
             df = df[(df.is_root == False) & (df.is_ad == False)].drop(['is_root', 'is_ad'], axis=1)
             csv_stem += "_3pnoad"
+            subset = "Non-Ad 3p Frames"
+    else:
+        subset = "All Frames"
     
     if 'session' in df.columns:
         groupers = ['session', 'site_tag', 'frame_url', 'p2', 'p1']
@@ -76,15 +80,15 @@ def main(argv):
         by_edge = stability_func(raw_by_edge)
         edge_ratio = len(by_edge) / len(raw_by_edge)
         
-        ax = (by_node.cumsum() / len(by_node)).plot(title=f"Cumulative Node-Bag Similarity [0.0-1.0] Scores\n({stability_algo}[{T1:.2f}]: {node_ratio:.2%})", ylim=YRANGE)
+        ax = (by_node.cumsum() / len(by_node)).plot(title=f"Cumulative Node-Bag Similarity [0.0-1.0] Scores\n({subset}; {stability_algo}[{T1:.2f}]: {node_ratio:.2%})", ylim=YRANGE)
         save_ax_pdf(ax, f"{csv_stem}_nodes_sum_{stability_algo}.pdf")
-        #ax = by_node.plot.box(title=f"Node-Bag Similarity [0.0-1.0] Score Distributions\n({stability_algo}[{T1:.2f}]: {node_ratio:.2%})", ylim=YRANGE)
-        #save_ax_pdf(ax, f"{csv_stem}_nodes_box_{stability_algo}.pdf", no_xticks=False)
+        ax = by_node.plot.box(title=f"Node-Bag Similarity [0.0-1.0] Score Distributions\n({subset}; {stability_algo}[{T1:.2f}]: {node_ratio:.2%})", ylim=YRANGE)
+        save_ax_pdf(ax, f"{csv_stem}_nodes_box_{stability_algo}.pdf", no_xticks=False)
         
-        ax = (by_edge.cumsum() / len(by_edge)).plot(title=f"Cumulative Edge-Bag Similarity [0.0-1.0] Scores\n({stability_algo}[{T1:.2f}]: {edge_ratio:.2%})", ylim=YRANGE)
+        ax = (by_edge.cumsum() / len(by_edge)).plot(title=f"Cumulative Edge-Bag Similarity [0.0-1.0] Scores\n({subset}; {stability_algo}[{T1:.2f}]: {edge_ratio:.2%})", ylim=YRANGE)
         save_ax_pdf(ax, f"{csv_stem}_edges_sum_{stability_algo}.pdf")
-        #ax = by_edge.plot.box(title=f"Edge-Bag Similarity [0.0-1.0] Score Distributions\n({stability_algo}[{T1:.2f}]: {edge_ratio:.2%})", ylim=YRANGE)
-        #save_ax_pdf(ax, f"{csv_stem}_edges_box_{stability_algo}.pdf", no_xticks=False)
+        ax = by_edge.plot.box(title=f"Edge-Bag Similarity [0.0-1.0] Score Distributions\n({subset}; {stability_algo}[{T1:.2f}]: {edge_ratio:.2%})", ylim=YRANGE)
+        save_ax_pdf(ax, f"{csv_stem}_edges_box_{stability_algo}.pdf", no_xticks=False)
 
 
 if __name__ == "__main__":

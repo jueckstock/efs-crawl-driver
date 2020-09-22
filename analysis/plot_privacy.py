@@ -16,9 +16,9 @@ import pandas as pd
 from loguru import logger
 from publicsuffix2 import get_sld
 
-from common import graphs_in_dir, walk_experiment_trees
-
 SITE_THRESHOLD = int(os.environ.get("SITE_THRESHOLD", 1))
+LENGTH_FLOOR = int(os.environ.get("LENGTH_FLOOR", 1))
+ROOT = bool(os.environ.get("ROOT", False))
 
 
 def main(argv):
@@ -32,10 +32,22 @@ def main(argv):
     mode = argv[2].lower()
     assert mode in ('lat', 'long'), "Invalid mode!"
 
+    df = pd.read_csv(privacy_csv)
+    if 'is_root' in df.columns:
+        if ROOT:
+            df = df[df.is_root == True].drop(['is_root', 'is_ad'], axis=1)
+            csv_stem += "_root"
+            subset = "Root/1p Frames"
+        else:
+            df = df[(df.is_root == False) & (df.is_ad == False)].drop(['is_root', 'is_ad'], axis=1)
+            csv_stem += "_3pnoad"
+            subset = "Non-Ad 3p Frames"
+    else:
+        subset = "All Frames"
+    
     source_tag = "_" + '-'.join(a.lower() for a in argv[3:]) if argv[3:] else ''
     privacy_pdf = f"{csv_stem}_{mode}{source_tag}.pdf"
     
-    df = pd.read_csv(privacy_csv)
     sources = argv[3:]
     if sources:
         df = df[df.source.isin(sources)]
