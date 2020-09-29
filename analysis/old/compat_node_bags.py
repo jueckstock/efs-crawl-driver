@@ -11,19 +11,17 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from common import parallel_ji_distros
+from common import parallel_ji_distros, find_3p_nonad_graphs
 
-NODE_BAG_BASENAME = os.environ.get('NODE_BAG_BASENAME', 'node_bag_ji_distros')
+BASENAME = os.environ.get('BASENAME', 'node_bag_ji_distros')
 
 
 def get_node_bag_for_dir(dirname: Optional[str]) -> multiset.Multiset:
     bag_map = multiset.Multiset()
-    if dirname is not None:
-        for fn in glob.glob(os.path.join(dirname, "*.graphml")):
-            graph = nx.read_graphml(fn)
-            node_types = nx.get_node_attributes(graph, "node type")
-            html_nodes = [graph.nodes[k].get("tag name") for k, v in node_types.items() if v == "HTML element"]
-            bag_map.update(Counter(html_nodes))
+    for graph in find_3p_nonad_graphs(dirname):
+        node_types = nx.get_node_attributes(graph, "node type")
+        html_nodes = [graph.nodes[k].get("tag name") for k, v in node_types.items() if v == "HTML element"]
+        bag_map.update(Counter(html_nodes))
     return bag_map
 
 
@@ -32,10 +30,11 @@ def main(argv):
         print(f"usage: {argv[0]} DIR1 DIR2 [DIR3 [...]]")
         return
     directories = argv[1:]
+    tags = [os.path.basename(d) for d in directories]
     root_map = dict(zip(tags, directories))
 
-    node_bag_csv = f"{NODE_BAG_BASENAME}.csv"
-    node_bag_pdf = f"{NODE_BAG_BASENAME}.pdf"
+    node_bag_csv = f"{BASENAME}.csv"
+    node_bag_pdf = f"{BASENAME}.pdf"
     
     try:
         node_bag_df = pd.read_csv(node_bag_csv)

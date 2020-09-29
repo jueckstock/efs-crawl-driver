@@ -12,10 +12,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from common import parallel_stats
+from common import parallel_stats, get_profile_groups, rank_distinguished_items
 from compat_request_bags import get_request_bag_for_dir
 
 BASENAME = os.environ.get('BASENAME', 'request_bag_base')
+TOP_COUNT = int(os.environ.get("TOP_COUNT", 50))
 
 
 def main(argv):
@@ -25,6 +26,7 @@ def main(argv):
     directories = argv[1:]
     tags = [os.path.basename(d) for d in directories]
     root_map = dict(zip(tags, directories))
+    profile_groups = get_profile_groups(tags)
 
     request_bag_csv = f"{BASENAME}.csv"
     try:
@@ -39,8 +41,11 @@ def main(argv):
         request_bag_df.to_csv(request_bag_csv, index=False, header=True)
     
 
-    top_50_domains = list(request_bag_df.etld1.value_counts().iloc[:50].index)
-    for etld1 in top_50_domains:
+    # compute the TOP_COUNT-most-distinguished eTLD+1 domains
+    domain_rank_df = rank_distinguished_items(request_bag_df, ['etld1', 'profile'], 'count', profile_groups)
+    print(domain_rank_df)
+    top_domains = list(domain_rank_df.index[:TOP_COUNT])
+    for etld1 in top_domains:
         cdf = request_bag_df[request_bag_df.etld1 == etld1].groupby(['stem', 'profile']).sum().unstack(fill_value=0).cumsum()
         ax = cdf.plot(title=f"CDFs of all requests sent to 3p eTLD+1 '{etld1}'")
         fig = ax.get_figure()
