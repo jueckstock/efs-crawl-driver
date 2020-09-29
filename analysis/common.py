@@ -6,11 +6,18 @@ import multiprocessing
 import os
 from collections import defaultdict
 from typing import Any, Callable, Iterable, Optional, Sequence, Tuple, Mapping
+from urllib.parse import urlparse
 
 import multiset
 import networkx as nx
 import numpy as np
 import pandas as pd
+from publicsuffix2 import get_sld
+
+
+def url_etld1(url: str) -> str:
+    bits = urlparse(url)
+    return get_sld(bits.hostname)
 
 
 def walk_experiment_trees(root_map: Mapping[str, str]) -> Iterable[Sequence[str]]:
