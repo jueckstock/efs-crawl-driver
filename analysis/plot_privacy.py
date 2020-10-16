@@ -70,15 +70,15 @@ def main(argv):
         distinctive_flows = counts[(counts.profile == 1) & (counts.site_etld1 > SITE_THRESHOLD)]
         xfield = 'http_etld1'
         yfield = 'site_etld1'
-        XLABEL = "distinct third-party sites\ncapable of lateral cookie tracking"
-        YLABEL = "cumulative counts of first-party sites\nacross which lateral tracking is possible"
+        XLABEL = "distinct third-party sites\ncapable of cross-site cookie tracking"
+        YLABEL = "cumulative counts of first-party sites\nacross which tracking is possible"
         STRIDE = 25
     else:
         distinctive_flows = counts[(counts.profile == 1) & (counts.session > 1)]
         xfield = 'site_etld1'
         yfield = 'http_etld1'
-        XLABEL = "distinct first-party sites\non which longitudinal tracking is possible"
-        YLABEL = "cumulative counts of third-party sites\ncapable of longitudinal tracking"
+        XLABEL = "distinct first-party sites\non which cross-time tracking is possible"
+        YLABEL = "cumulative counts of third-party sites\ncapable of tracking"
         #XLABEL = "distinct third-party sites\ncapable of longitudinal cookie tracking"
         #YLABEL = "cumulative counts of first-party sites\non which longitudinal tracking is possible"
         STRIDE = 50
